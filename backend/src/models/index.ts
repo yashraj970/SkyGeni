@@ -1,151 +1,118 @@
-import { getDatabase } from "../config/database";
+import { queryAll, queryOne } from "../config/database";
 import { Account, Rep, Deal, Activity, Target } from "../types";
 
 export function getAllAccounts(): Account[] {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM accounts").all() as Account[];
+  return queryAll<Account>("SELECT * FROM accounts");
 }
 
 export function getAccountById(id: string): Account | undefined {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM accounts WHERE account_id = ?").get(id) as
-    | Account
-    | undefined;
+  return queryOne<Account>("SELECT * FROM accounts WHERE account_id = ?", [id]);
 }
 
 export function getAllReps(): Rep[] {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM reps").all() as Rep[];
+  return queryAll<Rep>("SELECT * FROM reps");
 }
 
 export function getRepById(id: string): Rep | undefined {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM reps WHERE rep_id = ?").get(id) as
-    | Rep
-    | undefined;
+  return queryOne<Rep>("SELECT * FROM reps WHERE rep_id = ?", [id]);
 }
 
 export function getAllDeals(): Deal[] {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM deals").all() as Deal[];
+  return queryAll<Deal>("SELECT * FROM deals");
 }
 
 export function getDealsByStage(stage: string): Deal[] {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM deals WHERE stage = ?").all(stage) as Deal[];
+  return queryAll<Deal>("SELECT * FROM deals WHERE stage = ?", [stage]);
 }
 
 export function getDealsByRep(repId: string): Deal[] {
-  const db = getDatabase();
-  return db
-    .prepare("SELECT * FROM deals WHERE rep_id = ?")
-    .all(repId) as Deal[];
+  return queryAll<Deal>("SELECT * FROM deals WHERE rep_id = ?", [repId]);
 }
 
 export function getDealsByAccount(accountId: string): Deal[] {
-  const db = getDatabase();
-  return db
-    .prepare("SELECT * FROM deals WHERE account_id = ?")
-    .all(accountId) as Deal[];
+  return queryAll<Deal>("SELECT * FROM deals WHERE account_id = ?", [
+    accountId,
+  ]);
 }
 
 export function getDealsInDateRange(
   startDate: string,
   endDate: string,
 ): Deal[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<Deal>(
+    `
     SELECT * FROM deals 
     WHERE (closed_at BETWEEN ? AND ?) 
        OR (closed_at IS NULL AND created_at BETWEEN ? AND ?)
   `,
-    )
-    .all(startDate, endDate, startDate, endDate) as Deal[];
+    [startDate, endDate, startDate, endDate],
+  );
 }
 
 export function getClosedWonDealsInRange(
   startDate: string,
   endDate: string,
 ): Deal[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<Deal>(
+    `
     SELECT * FROM deals 
     WHERE stage = 'Closed Won' 
     AND closed_at BETWEEN ? AND ?
   `,
-    )
-    .all(startDate, endDate) as Deal[];
+    [startDate, endDate],
+  );
 }
 
 export function getOpenDeals(): Deal[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<Deal>(`
     SELECT * FROM deals 
     WHERE stage NOT IN ('Closed Won', 'Closed Lost')
-  `,
-    )
-    .all() as Deal[];
+  `);
 }
 
 export function getAllActivities(): Activity[] {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM activities").all() as Activity[];
+  return queryAll<Activity>("SELECT * FROM activities");
 }
 
 export function getActivitiesByDeal(dealId: string): Activity[] {
-  const db = getDatabase();
-  return db
-    .prepare("SELECT * FROM activities WHERE deal_id = ?")
-    .all(dealId) as Activity[];
+  return queryAll<Activity>("SELECT * FROM activities WHERE deal_id = ?", [
+    dealId,
+  ]);
 }
 
 export function getActivitiesInDateRange(
   startDate: string,
   endDate: string,
 ): Activity[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<Activity>(
+    `
     SELECT * FROM activities 
     WHERE timestamp BETWEEN ? AND ?
   `,
-    )
-    .all(startDate, endDate) as Activity[];
+    [startDate, endDate],
+  );
 }
 
 export function getAllTargets(): Target[] {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM targets ORDER BY month").all() as Target[];
+  return queryAll<Target>("SELECT * FROM targets ORDER BY month");
 }
 
 export function getTargetByMonth(month: string): Target | undefined {
-  const db = getDatabase();
-  return db.prepare("SELECT * FROM targets WHERE month = ?").get(month) as
-    | Target
-    | undefined;
+  return queryOne<Target>("SELECT * FROM targets WHERE month = ?", [month]);
 }
 
 export function getTargetsInRange(
   startMonth: string,
   endMonth: string,
 ): Target[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<Target>(
+    `
     SELECT * FROM targets 
     WHERE month BETWEEN ? AND ?
     ORDER BY month
   `,
-    )
-    .all(startMonth, endMonth) as Target[];
+    [startMonth, endMonth],
+  );
 }
 
 // Aggregation queries
@@ -154,10 +121,7 @@ export function getRevenueByMonth(): {
   revenue: number;
   deals: number;
 }[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<{ month: string; revenue: number; deals: number }>(`
     SELECT 
       substr(closed_at, 1, 7) as month,
       SUM(amount) as revenue,
@@ -166,9 +130,7 @@ export function getRevenueByMonth(): {
     WHERE stage = 'Closed Won' AND closed_at IS NOT NULL
     GROUP BY substr(closed_at, 1, 7)
     ORDER BY month
-  `,
-    )
-    .all() as { month: string; revenue: number; deals: number }[];
+  `);
 }
 
 export function getPipelineByStage(): {
@@ -176,10 +138,7 @@ export function getPipelineByStage(): {
   total: number;
   count: number;
 }[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<{ stage: string; total: number; count: number }>(`
     SELECT 
       stage,
       SUM(amount) as total,
@@ -187,9 +146,7 @@ export function getPipelineByStage(): {
     FROM deals 
     WHERE stage NOT IN ('Closed Won', 'Closed Lost')
     GROUP BY stage
-  `,
-    )
-    .all() as { stage: string; total: number; count: number }[];
+  `);
 }
 
 export function getWinRateBySegment(): {
@@ -197,10 +154,7 @@ export function getWinRateBySegment(): {
   won: number;
   total: number;
 }[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<{ segment: string; won: number; total: number }>(`
     SELECT 
       a.segment,
       SUM(CASE WHEN d.stage = 'Closed Won' THEN 1 ELSE 0 END) as won,
@@ -209,9 +163,7 @@ export function getWinRateBySegment(): {
     JOIN accounts a ON d.account_id = a.account_id
     WHERE d.stage IN ('Closed Won', 'Closed Lost')
     GROUP BY a.segment
-  `,
-    )
-    .all() as { segment: string; won: number; total: number }[];
+  `);
 }
 
 export function getRepPerformance(): {
@@ -222,10 +174,14 @@ export function getRepPerformance(): {
   revenue: number;
   deals: number;
 }[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<{
+    rep_id: string;
+    name: string;
+    won: number;
+    lost: number;
+    revenue: number;
+    deals: number;
+  }>(`
     SELECT 
       r.rep_id,
       r.name,
@@ -236,16 +192,7 @@ export function getRepPerformance(): {
     FROM reps r
     LEFT JOIN deals d ON r.rep_id = d.rep_id
     GROUP BY r.rep_id, r.name
-  `,
-    )
-    .all() as {
-    rep_id: string;
-    name: string;
-    won: number;
-    lost: number;
-    revenue: number;
-    deals: number;
-  }[];
+  `);
 }
 
 export function getAccountActivityCounts(): {
@@ -256,10 +203,14 @@ export function getAccountActivityCounts(): {
   last_activity: string | null;
   open_deal_value: number;
 }[] {
-  const db = getDatabase();
-  return db
-    .prepare(
-      `
+  return queryAll<{
+    account_id: string;
+    name: string;
+    segment: string;
+    activity_count: number;
+    last_activity: string | null;
+    open_deal_value: number;
+  }>(`
     SELECT 
       a.account_id,
       a.name,
@@ -271,14 +222,5 @@ export function getAccountActivityCounts(): {
     LEFT JOIN deals d ON a.account_id = d.account_id
     LEFT JOIN activities act ON d.deal_id = act.deal_id
     GROUP BY a.account_id, a.name, a.segment
-  `,
-    )
-    .all() as {
-    account_id: string;
-    name: string;
-    segment: string;
-    activity_count: number;
-    last_activity: string | null;
-    open_deal_value: number;
-  }[];
+  `);
 }
