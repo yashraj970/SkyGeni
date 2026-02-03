@@ -7,6 +7,7 @@ import DriversSection from "./DriversSection";
 import RiskFactorsSection from "./RiskFactorsSection";
 import RecommendationsSection from "./RecommendationsSection";
 import LoadingSpinner from "./common/LoadingSpinner";
+import ErrorBoundary from "./common/ErrorBoundary";
 
 const Dashboard: React.FC = () => {
   const { data, loading, error, loadingStates, refetch } = useDashboardData();
@@ -47,28 +48,36 @@ const Dashboard: React.FC = () => {
   return (
     <Box sx={{ display: "flex", flexDirection: "column", gap: 4 }}>
       {/* Summary Section */}
-      <SummarySection data={data.summary} loading={loadingStates.summary} />
+      <ErrorBoundary>
+        <SummarySection data={data.summary} loading={loadingStates.summary} />
+      </ErrorBoundary>
 
       <Divider />
 
       {/* Revenue Drivers */}
-      <DriversSection data={data.drivers} loading={loadingStates.drivers} />
+      <ErrorBoundary>
+        <DriversSection data={data.drivers} loading={loadingStates.drivers} />
+      </ErrorBoundary>
 
       <Divider />
 
       {/* Risk Factors */}
-      <RiskFactorsSection
-        data={data.riskFactors}
-        loading={loadingStates.riskFactors}
-      />
+      <ErrorBoundary>
+        <RiskFactorsSection
+          data={data.riskFactors}
+          loading={loadingStates.riskFactors}
+        />
+      </ErrorBoundary>
 
       <Divider />
 
       {/* Recommendations */}
-      <RecommendationsSection
-        data={data.recommendations}
-        loading={loadingStates.recommendations}
-      />
+      <ErrorBoundary>
+        <RecommendationsSection
+          data={data.recommendations}
+          loading={loadingStates.recommendations}
+        />
+      </ErrorBoundary>
     </Box>
   );
 };

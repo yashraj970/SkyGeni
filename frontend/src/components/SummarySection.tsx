@@ -13,7 +13,6 @@ import {
   Flag as TargetIcon,
   TrendingUp as TrendingUpIcon,
   TrendingDown as TrendingDownIcon,
-  Speed as SpeedIcon,
   Handshake as DealsIcon,
 } from "@mui/icons-material";
 import { SummaryData } from "../types";
@@ -25,14 +24,16 @@ interface SummarySectionProps {
   loading: boolean;
 }
 
-const formatCurrency = (value: number): string => {
-  if (value >= 1000000) {
-    return `$${(value / 1000000).toFixed(2)}M`;
+// Safe formatCurrency that handles null/undefined
+const formatCurrency = (value: number | null | undefined): string => {
+  const safeValue = value ?? 0;
+  if (safeValue >= 1000000) {
+    return `$${(safeValue / 1000000).toFixed(2)}M`;
   }
-  if (value >= 1000) {
-    return `$${(value / 1000).toFixed(0)}K`;
+  if (safeValue >= 1000) {
+    return `$${(safeValue / 1000).toFixed(0)}K`;
   }
-  return `$${value.toFixed(0)}`;
+  return `$${safeValue.toFixed(0)}`;
 };
 
 const SummarySection: React.FC<SummarySectionProps> = ({ data, loading }) => {
@@ -52,11 +53,18 @@ const SummarySection: React.FC<SummarySectionProps> = ({ data, loading }) => {
     );
   }
 
-  const statusColor = {
-    ahead: "success",
-    behind: "error",
-    "on-track": "warning",
-  }[data.status] as "success" | "error" | "warning";
+  // Safe access with defaults
+  const currentQuarterRevenue = data.currentQuarterRevenue ?? 0;
+  const target = data.target ?? 0;
+  const gap = data.gap ?? 0;
+  const status = data.status || "on-track";
+  const qoqChange = data.qoqChange ?? 0;
+  const yoyChange = data.yoyChange ?? 0;
+  const quarterLabel = data.quarterLabel || "Current Quarter";
+  const daysRemaining = data.daysRemaining ?? 0;
+  const closedDeals = data.closedDeals ?? 0;
+  const openDeals = data.openDeals ?? 0;
+  const totalPipeline = data.totalPipeline ?? 0;
 
   return (
     <Box>
@@ -65,9 +73,9 @@ const SummarySection: React.FC<SummarySectionProps> = ({ data, loading }) => {
         sx={{
           mb: 3,
           background:
-            data.status === "ahead"
+            status === "ahead"
               ? "linear-gradient(135deg, #10b981 0%, #059669 100%)"
-              : data.status === "behind"
+              : status === "behind"
                 ? "linear-gradient(135deg, #ef4444 0%, #dc2626 100%)"
                 : "linear-gradient(135deg, #f59e0b 0%, #d97706 100%)",
           color: "white",
@@ -80,10 +88,10 @@ const SummarySection: React.FC<SummarySectionProps> = ({ data, loading }) => {
                 sx={{ display: "flex", alignItems: "center", gap: 2, mb: 1 }}
               >
                 <Typography variant="h6" sx={{ fontWeight: 500, opacity: 0.9 }}>
-                  {data.quarterLabel} Performance
+                  {quarterLabel} Performance
                 </Typography>
                 <Chip
-                  label={data.status.replace("-", " ").toUpperCase()}
+                  label={status.replace("-", " ").toUpperCase()}
                   size="small"
                   sx={{
                     backgroundColor: "rgba(255,255,255,0.2)",
@@ -93,22 +101,20 @@ const SummarySection: React.FC<SummarySectionProps> = ({ data, loading }) => {
                 />
               </Box>
               <Typography variant="h3" sx={{ fontWeight: 700, mb: 1 }}>
-                {data.status === "behind" ? "We're " : "We're "}
-                {formatCurrency(Math.abs(data.gap))}
-                {data.status === "behind"
-                  ? " behind target"
-                  : " ahead of target"}
+                {status === "behind" ? "We're " : "We're "}
+                {formatCurrency(Math.abs(gap))}
+                {status === "behind" ? " behind target" : " ahead of target"}
               </Typography>
               <Typography variant="body1" sx={{ opacity: 0.9 }}>
-                {data.daysRemaining} days remaining in quarter •{" "}
-                {data.closedDeals} deals closed
+                {daysRemaining} days remaining in quarter • {closedDeals} deals
+                closed
               </Typography>
             </Grid>
             <Grid item xs={12} md={4}>
               <Box sx={{ display: "flex", justifyContent: "center" }}>
                 <GaugeChart
-                  value={data.currentQuarterRevenue}
-                  target={data.target}
+                  value={currentQuarterRevenue}
+                  target={target || 1} // Avoid division by zero
                   label="Target Achievement"
                   width={180}
                   height={120}
@@ -124,8 +130,8 @@ const SummarySection: React.FC<SummarySectionProps> = ({ data, loading }) => {
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Current Quarter Revenue"
-            value={formatCurrency(data.currentQuarterRevenue)}
-            change={data.qoqChange}
+            value={formatCurrency(currentQuarterRevenue)}
+            change={qoqChange}
             changeLabel="vs last quarter"
             icon={<RevenueIcon />}
             color="#2563eb"
@@ -134,8 +140,8 @@ const SummarySection: React.FC<SummarySectionProps> = ({ data, loading }) => {
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Quarterly Target"
-            value={formatCurrency(data.target)}
-            subtitle={`Gap: ${formatCurrency(Math.abs(data.gap))}`}
+            value={formatCurrency(target)}
+            subtitle={`Gap: ${formatCurrency(Math.abs(gap))}`}
             icon={<TargetIcon />}
             color="#7c3aed"
           />
@@ -143,18 +149,16 @@ const SummarySection: React.FC<SummarySectionProps> = ({ data, loading }) => {
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Year-over-Year"
-            value={`${data.yoyChange > 0 ? "+" : ""}${data.yoyChange.toFixed(1)}%`}
-            icon={
-              data.yoyChange >= 0 ? <TrendingUpIcon /> : <TrendingDownIcon />
-            }
-            color={data.yoyChange >= 0 ? "#10b981" : "#ef4444"}
+            value={`${yoyChange > 0 ? "+" : ""}${yoyChange.toFixed(1)}%`}
+            icon={yoyChange >= 0 ? <TrendingUpIcon /> : <TrendingDownIcon />}
+            color={yoyChange >= 0 ? "#10b981" : "#ef4444"}
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
           <MetricCard
             title="Open Pipeline"
-            value={formatCurrency(data.totalPipeline)}
-            subtitle={`${data.openDeals} active deals`}
+            value={formatCurrency(totalPipeline)}
+            subtitle={`${openDeals} active deals`}
             icon={<DealsIcon />}
             color="#f59e0b"
           />

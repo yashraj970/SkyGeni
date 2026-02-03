@@ -6,7 +6,6 @@ import {
   Typography,
   Box,
   Chip,
-  Divider,
   Skeleton,
 } from "@mui/material";
 import {
@@ -29,28 +28,72 @@ interface DriversSectionProps {
   loading: boolean;
 }
 
-const formatValue = (value: number, type: string): string => {
+const formatValue = (
+  value: number | null | undefined,
+  type: string,
+): string => {
+  const safeValue = value ?? 0;
   switch (type) {
     case "currency":
-      if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`;
-      if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-      return `$${value.toFixed(0)}`;
+      if (safeValue >= 1000000) return `$${(safeValue / 1000000).toFixed(2)}M`;
+      if (safeValue >= 1000) return `$${(safeValue / 1000).toFixed(0)}K`;
+      return `$${safeValue.toFixed(0)}`;
     case "percentage":
-      return `${value.toFixed(1)}%`;
+      return `${safeValue.toFixed(1)}%`;
     case "days":
-      return `${value.toFixed(0)} days`;
+      return `${safeValue.toFixed(0)} days`;
     default:
-      return value.toLocaleString();
+      return safeValue.toLocaleString();
   }
 };
 
 const DriverCard: React.FC<{
-  metric: DriverMetric;
+  metric: DriverMetric | null | undefined;
   icon: React.ReactNode;
   valueType: string;
-}> = ({ metric, icon, valueType }) => {
+  title: string;
+}> = ({ metric, icon, valueType, title }) => {
+  // Handle null/undefined metric
+  if (!metric) {
+    return (
+      <Card sx={{ height: "100%" }}>
+        <CardContent>
+          <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
+            <Box
+              sx={{
+                display: "flex",
+                alignItems: "center",
+                justifyContent: "center",
+                width: 36,
+                height: 36,
+                borderRadius: 2,
+                backgroundColor: "primary.main",
+                color: "white",
+              }}
+            >
+              {icon}
+            </Box>
+            <Typography variant="subtitle2" color="text.secondary">
+              {title}
+            </Typography>
+          </Box>
+          <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
+            N/A
+          </Typography>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  const current = metric.current ?? 0;
+  const previous = metric.previous ?? 0;
+  const changePercentage = metric.changePercentage ?? 0;
+  const trend = metric.trend || "stable";
+  const impact = metric.impact || "neutral";
+  const name = metric.name || title;
+
   const getTrendIcon = () => {
-    switch (metric.trend) {
+    switch (trend) {
       case "up":
         return <TrendingUp sx={{ fontSize: 18 }} />;
       case "down":
@@ -64,7 +107,7 @@ const DriverCard: React.FC<{
     positive: "success",
     negative: "error",
     neutral: "default",
-  }[metric.impact] as "success" | "error" | "default";
+  }[impact] as "success" | "error" | "default";
 
   return (
     <Card sx={{ height: "100%" }}>
@@ -86,11 +129,11 @@ const DriverCard: React.FC<{
               {icon}
             </Box>
             <Typography variant="subtitle2" color="text.secondary">
-              {metric.name}
+              {name}
             </Typography>
           </Box>
           <Chip
-            label={metric.impact}
+            label={impact}
             size="small"
             color={impactColor}
             variant="outlined"
@@ -98,7 +141,7 @@ const DriverCard: React.FC<{
         </Box>
 
         <Typography variant="h4" sx={{ fontWeight: 700, mb: 1 }}>
-          {formatValue(metric.current, valueType)}
+          {formatValue(current, valueType)}
         </Typography>
 
         <Box sx={{ display: "flex", alignItems: "center", gap: 1, mb: 2 }}>
@@ -107,17 +150,17 @@ const DriverCard: React.FC<{
               display: "flex",
               alignItems: "center",
               color:
-                metric.changePercentage > 0
+                changePercentage > 0
                   ? "success.main"
-                  : metric.changePercentage < 0
+                  : changePercentage < 0
                     ? "error.main"
                     : "text.secondary",
             }}
           >
             {getTrendIcon()}
             <Typography variant="body2" sx={{ fontWeight: 600, ml: 0.5 }}>
-              {metric.changePercentage > 0 ? "+" : ""}
-              {metric.changePercentage.toFixed(1)}%
+              {changePercentage > 0 ? "+" : ""}
+              {changePercentage.toFixed(1)}%
             </Typography>
           </Box>
           <Typography variant="caption" color="text.secondary">
@@ -127,15 +170,15 @@ const DriverCard: React.FC<{
 
         <TrendChart
           data={{
-            current: metric.current,
-            previous: metric.previous,
-            change: metric.changePercentage,
+            current,
+            previous,
+            change: changePercentage,
           }}
           width={200}
           height={40}
         />
 
-        {metric.benchmark && (
+        {metric.benchmark != null && (
           <Box
             sx={{
               mt: 2,
@@ -172,6 +215,11 @@ const DriversSection: React.FC<DriversSectionProps> = ({ data, loading }) => {
     );
   }
 
+  // Safe access with defaults
+  const pipelineByStage = data.pipelineByStage || [];
+  const winRateBySegment = data.winRateBySegment || [];
+  const monthlyTrend = data.monthlyTrend || [];
+
   return (
     <Box>
       <Typography variant="h5" sx={{ fontWeight: 600, mb: 3 }}>
@@ -185,6 +233,7 @@ const DriversSection: React.FC<DriversSectionProps> = ({ data, loading }) => {
             metric={data.pipelineSize}
             icon={<ShowChart sx={{ fontSize: 20 }} />}
             valueType="currency"
+            title="Pipeline Size"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -192,6 +241,7 @@ const DriversSection: React.FC<DriversSectionProps> = ({ data, loading }) => {
             metric={data.winRate}
             icon={<Assessment sx={{ fontSize: 20 }} />}
             valueType="percentage"
+            title="Win Rate"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -199,6 +249,7 @@ const DriversSection: React.FC<DriversSectionProps> = ({ data, loading }) => {
             metric={data.avgDealSize}
             icon={<Speed sx={{ fontSize: 20 }} />}
             valueType="currency"
+            title="Avg Deal Size"
           />
         </Grid>
         <Grid item xs={12} sm={6} md={3}>
@@ -206,6 +257,7 @@ const DriversSection: React.FC<DriversSectionProps> = ({ data, loading }) => {
             metric={data.salesCycleTime}
             icon={<Timer sx={{ fontSize: 20 }} />}
             valueType="days"
+            title="Sales Cycle"
           />
         </Grid>
       </Grid>
@@ -219,21 +271,27 @@ const DriversSection: React.FC<DriversSectionProps> = ({ data, loading }) => {
               <Typography variant="h6" sx={{ mb: 3 }}>
                 Pipeline by Stage
               </Typography>
-              <BarChart
-                data={data.pipelineByStage.map((stage) => ({
-                  label: stage.stage,
-                  value: stage.value,
-                  color: stage.color,
-                }))}
-                width={450}
-                height={250}
-                horizontal
-                formatValue={(v) =>
-                  v >= 1000000
-                    ? `$${(v / 1000000).toFixed(1)}M`
-                    : `$${(v / 1000).toFixed(0)}K`
-                }
-              />
+              {pipelineByStage.length > 0 ? (
+                <BarChart
+                  data={pipelineByStage.map((stage) => ({
+                    label: stage.stage || "Unknown",
+                    value: stage.value ?? 0,
+                    color: stage.color || "#64748b",
+                  }))}
+                  width={450}
+                  height={250}
+                  horizontal
+                  formatValue={(v) =>
+                    v >= 1000000
+                      ? `$${(v / 1000000).toFixed(1)}M`
+                      : `$${(v / 1000).toFixed(0)}K`
+                  }
+                />
+              ) : (
+                <Typography color="text.secondary">
+                  No pipeline data available
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -245,19 +303,27 @@ const DriversSection: React.FC<DriversSectionProps> = ({ data, loading }) => {
               <Typography variant="h6" sx={{ mb: 3 }}>
                 Win Rate by Segment
               </Typography>
-              <DonutChart
-                data={data.winRateBySegment.map((seg) => ({
-                  label: seg.segment,
-                  value: seg.dealCount,
-                }))}
-                width={200}
-                height={200}
-                centerLabel="Avg Win Rate"
-                centerValue={`${(
-                  data.winRateBySegment.reduce((sum, s) => sum + s.winRate, 0) /
-                  data.winRateBySegment.length
-                ).toFixed(0)}%`}
-              />
+              {winRateBySegment.length > 0 ? (
+                <DonutChart
+                  data={winRateBySegment.map((seg) => ({
+                    label: seg.segment || "Unknown",
+                    value: seg.dealCount ?? 0,
+                  }))}
+                  width={200}
+                  height={200}
+                  centerLabel="Avg Win Rate"
+                  centerValue={`${(
+                    winRateBySegment.reduce(
+                      (sum, s) => sum + (s.winRate ?? 0),
+                      0,
+                    ) / (winRateBySegment.length || 1)
+                  ).toFixed(0)}%`}
+                />
+              ) : (
+                <Typography color="text.secondary">
+                  No segment data available
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>
@@ -269,17 +335,23 @@ const DriversSection: React.FC<DriversSectionProps> = ({ data, loading }) => {
               <Typography variant="h6" sx={{ mb: 3 }}>
                 Monthly Revenue vs Target
               </Typography>
-              <LineChart
-                data={data.monthlyTrend.map((m) => ({
-                  label: m.month,
-                  value: m.revenue,
-                  target: m.target,
-                }))}
-                width={900}
-                height={280}
-                showTarget
-                showArea
-              />
+              {monthlyTrend.length > 0 ? (
+                <LineChart
+                  data={monthlyTrend.map((m) => ({
+                    label: m.month || "Unknown",
+                    value: m.revenue ?? 0,
+                    target: m.target ?? 0,
+                  }))}
+                  width={900}
+                  height={280}
+                  showTarget
+                  showArea
+                />
+              ) : (
+                <Typography color="text.secondary">
+                  No trend data available
+                </Typography>
+              )}
             </CardContent>
           </Card>
         </Grid>

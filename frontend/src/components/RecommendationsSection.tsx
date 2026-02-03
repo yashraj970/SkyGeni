@@ -10,10 +10,6 @@ import {
   ListItem,
   ListItemIcon,
   ListItemText,
-  Stepper,
-  Step,
-  StepLabel,
-  StepContent,
   Avatar,
   Skeleton,
   alpha,
@@ -75,14 +71,16 @@ const getEffortLabel = (effort: string) => {
     case "high":
       return { label: "Major Initiative", color: "error" };
     default:
-      return { label: effort, color: "default" };
+      return { label: effort || "Unknown", color: "default" };
   }
 };
 
-const formatCurrency = (value: number): string => {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`;
-  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+// Safe formatCurrency
+const formatCurrency = (value: number | null | undefined): string => {
+  const safeValue = value ?? 0;
+  if (safeValue >= 1000000) return `$${(safeValue / 1000000).toFixed(2)}M`;
+  if (safeValue >= 1000) return `$${(safeValue / 1000).toFixed(0)}K`;
+  return `$${safeValue.toFixed(0)}`;
 };
 
 interface RecommendationCardProps {
@@ -94,8 +92,19 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
   recommendation,
   index,
 }) => {
-  const categoryColor = getCategoryColor(recommendation.category);
-  const effortInfo = getEffortLabel(recommendation.effort);
+  // Safe access with defaults
+  const category = recommendation.category || "strategy";
+  const priority = recommendation.priority ?? index + 1;
+  const effort = recommendation.effort || "medium";
+  const title = recommendation.title || "Recommendation";
+  const description = recommendation.description || "No description available";
+  const expectedImpact = recommendation.expectedImpact ?? 0;
+  const reasoning = recommendation.reasoning || "Based on data analysis";
+  const actionItems = recommendation.actionItems || [];
+  const timeframe = recommendation.timeframe || "TBD";
+
+  const categoryColor = getCategoryColor(category);
+  const effortInfo = getEffortLabel(effort);
 
   return (
     <Card
@@ -130,7 +139,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
           fontWeight: 600,
         }}
       >
-        <StarIcon sx={{ fontSize: 14 }} />#{recommendation.priority}
+        <StarIcon sx={{ fontSize: 14 }} />#{priority}
       </Box>
 
       <CardContent sx={{ pt: 4, flex: 1 }}>
@@ -150,7 +159,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
               color: categoryColor,
             }}
           >
-            {getCategoryIcon(recommendation.category)}
+            {getCategoryIcon(category)}
           </Avatar>
           <Box sx={{ display: "flex", gap: 1 }}>
             <Chip
@@ -163,11 +172,11 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
         </Box>
 
         <Typography variant="h6" sx={{ fontWeight: 600, mb: 1 }}>
-          {recommendation.title}
+          {title}
         </Typography>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
-          {recommendation.description}
+          {description}
         </Typography>
 
         {/* Expected Impact */}
@@ -194,15 +203,12 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
               variant="body2"
               sx={{ fontWeight: 700, color: categoryColor }}
             >
-              {formatCurrency(recommendation.expectedImpact)}
+              {formatCurrency(expectedImpact)}
             </Typography>
           </Box>
           <LinearProgress
             variant="determinate"
-            value={Math.min(
-              (recommendation.expectedImpact / 1000000) * 100,
-              100,
-            )}
+            value={Math.min((expectedImpact / 1000000) * 100, 100)}
             sx={{
               height: 6,
               borderRadius: 3,
@@ -227,26 +233,32 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
             mb: 2,
           }}
         >
-          💡 {recommendation.reasoning}
+          💡 {reasoning}
         </Typography>
 
         {/* Action Items */}
-        <Typography variant="subtitle2" sx={{ mb: 1 }}>
-          Action Items
-        </Typography>
-        <List dense disablePadding>
-          {recommendation.actionItems.slice(0, 3).map((item, i) => (
-            <ListItem key={i} disableGutters sx={{ py: 0.5 }}>
-              <ListItemIcon sx={{ minWidth: 28 }}>
-                <CheckCircleIcon sx={{ fontSize: 16, color: "success.main" }} />
-              </ListItemIcon>
-              <ListItemText
-                primary={item}
-                primaryTypographyProps={{ variant: "body2" }}
-              />
-            </ListItem>
-          ))}
-        </List>
+        {actionItems.length > 0 && (
+          <>
+            <Typography variant="subtitle2" sx={{ mb: 1 }}>
+              Action Items
+            </Typography>
+            <List dense disablePadding>
+              {actionItems.slice(0, 3).map((item, i) => (
+                <ListItem key={i} disableGutters sx={{ py: 0.5 }}>
+                  <ListItemIcon sx={{ minWidth: 28 }}>
+                    <CheckCircleIcon
+                      sx={{ fontSize: 16, color: "success.main" }}
+                    />
+                  </ListItemIcon>
+                  <ListItemText
+                    primary={item}
+                    primaryTypographyProps={{ variant: "body2" }}
+                  />
+                </ListItem>
+              ))}
+            </List>
+          </>
+        )}
 
         {/* Timeframe */}
         <Box
@@ -262,7 +274,7 @@ const RecommendationCard: React.FC<RecommendationCardProps> = ({
         >
           <SpeedIcon sx={{ fontSize: 16, color: "text.secondary" }} />
           <Typography variant="caption" color="text.secondary">
-            Timeframe: {recommendation.timeframe}
+            Timeframe: {timeframe}
           </Typography>
         </Box>
       </CardContent>
@@ -289,6 +301,10 @@ const RecommendationsSection: React.FC<RecommendationsSectionProps> = ({
     );
   }
 
+  // Safe access with defaults
+  const recommendations = data.recommendations || [];
+  const dataFreshness = data.dataFreshness || "Unknown";
+
   return (
     <Box>
       <Box
@@ -305,24 +321,34 @@ const RecommendationsSection: React.FC<RecommendationsSectionProps> = ({
           </Typography>
           <Typography variant="body2" color="text.secondary">
             AI-generated recommendations based on current data • Updated{" "}
-            {data.dataFreshness}
+            {dataFreshness}
           </Typography>
         </Box>
         <Chip
           icon={<LightbulbIcon />}
-          label={`${data.recommendations.length} Actions`}
+          label={`${recommendations.length} Actions`}
           color="primary"
           variant="outlined"
         />
       </Box>
 
-      <Grid container spacing={3}>
-        {data.recommendations.map((rec, index) => (
-          <Grid item xs={12} md={4} key={rec.id}>
-            <RecommendationCard recommendation={rec} index={index} />
-          </Grid>
-        ))}
-      </Grid>
+      {recommendations.length > 0 ? (
+        <Grid container spacing={3}>
+          {recommendations.map((rec, index) => (
+            <Grid item xs={12} md={4} key={rec.id || `rec-${index}`}>
+              <RecommendationCard recommendation={rec} index={index} />
+            </Grid>
+          ))}
+        </Grid>
+      ) : (
+        <Card>
+          <CardContent sx={{ textAlign: "center", py: 4 }}>
+            <Typography color="text.secondary">
+              No recommendations available at this time
+            </Typography>
+          </CardContent>
+        </Card>
+      )}
     </Box>
   );
 };

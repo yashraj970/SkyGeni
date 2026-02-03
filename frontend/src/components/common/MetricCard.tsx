@@ -6,7 +6,7 @@ interface MetricCardProps {
   title: string;
   value: string | number;
   subtitle?: string;
-  change?: number;
+  change?: number | null;
   changeLabel?: string;
   icon?: React.ReactNode;
   color?: string;
@@ -24,7 +24,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
   loading = false,
 }) => {
   const getTrendIcon = () => {
-    if (change === undefined || change === 0) {
+    if (change === undefined || change === null || change === 0) {
       return <TrendingFlat sx={{ fontSize: 16 }} />;
     }
     return change > 0 ? (
@@ -35,7 +35,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
   };
 
   const getTrendColor = () => {
-    if (change === undefined || change === 0) return "text.secondary";
+    if (change === undefined || change === null || change === 0)
+      return "text.secondary";
     return change > 0 ? "success.main" : "error.main";
   };
 
@@ -48,6 +49,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
       </Card>
     );
   }
+
+  const safeChange = change ?? 0;
 
   return (
     <Card
@@ -123,9 +126,9 @@ const MetricCard: React.FC<MetricCardProps> = ({
         {value}
       </Typography>
 
-      {(change !== undefined || subtitle) && (
+      {(change !== undefined && change !== null) || subtitle ? (
         <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
-          {change !== undefined && (
+          {change !== undefined && change !== null && (
             <Box
               sx={{
                 display: "flex",
@@ -136,8 +139,8 @@ const MetricCard: React.FC<MetricCardProps> = ({
             >
               {getTrendIcon()}
               <Typography variant="body2" sx={{ fontWeight: 600 }}>
-                {change > 0 ? "+" : ""}
-                {change.toFixed(1)}%
+                {safeChange > 0 ? "+" : ""}
+                {safeChange.toFixed(1)}%
               </Typography>
             </Box>
           )}
@@ -152,7 +155,7 @@ const MetricCard: React.FC<MetricCardProps> = ({
             </Typography>
           )}
         </Box>
-      )}
+      ) : null}
     </Card>
   );
 };

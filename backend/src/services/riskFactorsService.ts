@@ -19,7 +19,7 @@ export function getRiskFactors(): RiskFactorsResponse {
     highSeverity: allRisks.filter((r) => r.severity === "high").length,
     mediumSeverity: allRisks.filter((r) => r.severity === "medium").length,
     lowSeverity: allRisks.filter((r) => r.severity === "low").length,
-    totalAtRisk: allRisks.reduce((sum, r) => sum + r.potentialImpact, 0),
+    totalAtRisk: allRisks.reduce((sum, r) => sum + (r.potentialImpact || 0), 0),
   };
 
   return {
@@ -39,6 +39,9 @@ function getStaleDeals(): RiskFactor[] {
   const risks: RiskFactor[] = [];
 
   for (const deal of openDeals) {
+    // Skip deals without proper data
+    if (!deal.deal_id || !deal.created_at) continue;
+
     const dealActivities = allActivities.filter(
       (a) => a.deal_id === deal.deal_id,
     );
@@ -60,20 +63,21 @@ function getStaleDeals(): RiskFactor[] {
         high: 30,
         medium: 21,
       });
+      const amount = deal.amount || 0;
 
       risks.push({
         id: `stale-${deal.deal_id}`,
         type: "stale-deal",
         severity,
-        title: `Stale Deal: ${account?.name || deal.account_id}`,
-        description: `Deal has had no activity for ${daysSinceLastActivity} days. Currently in ${deal.stage} stage.`,
+        title: `Stale Deal: ${account?.name || deal.account_id || "Unknown"}`,
+        description: `Deal has had no activity for ${daysSinceLastActivity} days. Currently in ${deal.stage || "Unknown"} stage.`,
         metric: "Days Since Activity",
         metricValue: daysSinceLastActivity,
         threshold: 14,
-        potentialImpact: deal.amount,
+        potentialImpact: amount,
         entity: {
           id: deal.deal_id,
-          name: account?.name || deal.account_id,
+          name: account?.name || deal.account_id || "Unknown",
           type: "deal",
         },
         suggestedAction: `Schedule follow-up with ${account?.name || "account"}. Consider deal review if no progress in 7 days.`,
@@ -83,26 +87,39 @@ function getStaleDeals(): RiskFactor[] {
   }
 
   return risks.sort((a, b) => {
-    const severityOrder = { high: 0, medium: 1, low: 2 };
-    return severityOrder[a.severity] - severityOrder[b.severity];
+    const severityOrder: Record<string, number> = {
+      high: 0,
+      medium: 1,
+      low: 2,
+    };
+    return (severityOrder[a.severity] || 2) - (severityOrder[b.severity] || 2);
   });
 }
 
 function getUnderperformingReps(): RiskFactor[] {
   const repPerformance = models.getRepPerformance();
-  const avgWinRate =
-    repPerformance.reduce((sum, r) => {
-      const total = r.won + r.lost;
-      return sum + (total > 0 ? (r.won / total) * 100 : 0);
-    }, 0) / repPerformance.length;
+
+  // Calculate average win rate
+  let totalWinRate = 0;
+  let countWithData = 0;
+
+  for (const rep of repPerformance) {
+    const total = (rep.won || 0) + (rep.lost || 0);
+    if (total > 0) {
+      totalWinRate += ((rep.won || 0) / total) * 100;
+      countWithData++;
+    }
+  }
+
+  const avgWinRate = countWithData > 0 ? totalWinRate / countWithData : 25;
 
   const risks: RiskFactor[] = [];
 
   for (const rep of repPerformance) {
-    const total = rep.won + rep.lost;
+    const total = (rep.won || 0) + (rep.lost || 0);
     if (total < 3) continue; // Not enough data
 
-    const winRate = calculateWinRate(rep.won, total);
+    const winRate = calculateWinRate(rep.won || 0, total);
     const deviation = avgWinRate - winRate;
 
     // Flag if win rate is 15%+ below average
@@ -110,7 +127,10 @@ function getUnderperformingReps(): RiskFactor[] {
       const openDeals = models
         .getDealsByRep(rep.rep_id)
         .filter((d) => d.stage !== "Closed Won" && d.stage !== "Closed Lost");
-      const pipelineAtRisk = openDeals.reduce((sum, d) => sum + d.amount, 0);
+      const pipelineAtRisk = openDeals.reduce(
+        (sum, d) => sum + (d.amount || 0),
+        0,
+      );
 
       const severity = determineSeverity(deviation, { high: 25, medium: 20 });
 
@@ -118,7 +138,7 @@ function getUnderperformingReps(): RiskFactor[] {
         id: `rep-${rep.rep_id}`,
         type: "underperforming-rep",
         severity,
-        title: `Underperforming Rep: ${rep.name}`,
+        title: `Underperforming Rep: ${rep.name || "Unknown"}`,
         description: `Win rate of ${winRate.toFixed(1)}% is ${deviation.toFixed(1)}% below team average of ${avgWinRate.toFixed(1)}%.`,
         metric: "Win Rate Deviation",
         metricValue: deviation,
@@ -126,16 +146,18 @@ function getUnderperformingReps(): RiskFactor[] {
         potentialImpact: pipelineAtRisk,
         entity: {
           id: rep.rep_id,
-          name: rep.name,
+          name: rep.name || "Unknown",
           type: "rep",
         },
-        suggestedAction: `Schedule coaching session with ${rep.name}. Review lost deals to identify improvement areas.`,
+        suggestedAction: `Schedule coaching session with ${rep.name || "rep"}. Review lost deals to identify improvement areas.`,
         lastUpdated: formatDate(new Date()),
       });
     }
   }
 
-  return risks.sort((a, b) => b.potentialImpact - a.potentialImpact);
+  return risks.sort(
+    (a, b) => (b.potentialImpact || 0) - (a.potentialImpact || 0),
+  );
 }
 
 function getLowActivityAccounts(): RiskFactor[] {
@@ -146,14 +168,17 @@ function getLowActivityAccounts(): RiskFactor[] {
 
   for (const account of accountActivity) {
     // Skip if no open deals
-    if (account.open_deal_value === 0) continue;
+    const openDealValue = account.open_deal_value || 0;
+    if (openDealValue === 0) continue;
 
     const daysSinceActivity = account.last_activity
       ? getDaysBetween(account.last_activity, today)
       : 999;
 
+    const activityCount = account.activity_count || 0;
+
     // Flag accounts with low activity and open deals
-    if (daysSinceActivity >= 21 || account.activity_count < 3) {
+    if (daysSinceActivity >= 21 || activityCount < 3) {
       const severity = determineSeverity(daysSinceActivity, {
         high: 45,
         medium: 30,
@@ -163,24 +188,24 @@ function getLowActivityAccounts(): RiskFactor[] {
         id: `account-${account.account_id}`,
         type: "low-activity-account",
         severity,
-        title: `Low Activity: ${account.name}`,
-        description: `${account.segment} account with $${(account.open_deal_value / 1000).toFixed(0)}K in pipeline has only ${account.activity_count} activities. Last activity: ${daysSinceActivity} days ago.`,
+        title: `Low Activity: ${account.name || "Unknown"}`,
+        description: `${account.segment || "Unknown"} account with $${(openDealValue / 1000).toFixed(0)}K in pipeline has only ${activityCount} activities. Last activity: ${daysSinceActivity} days ago.`,
         metric: "Days Since Activity",
         metricValue: daysSinceActivity,
         threshold: 21,
-        potentialImpact: account.open_deal_value,
+        potentialImpact: openDealValue,
         entity: {
           id: account.account_id,
-          name: account.name,
+          name: account.name || "Unknown",
           type: "account",
         },
-        suggestedAction: `Increase engagement with ${account.name}. Schedule call or send relevant content.`,
+        suggestedAction: `Increase engagement with ${account.name || "account"}. Schedule call or send relevant content.`,
         lastUpdated: account.last_activity || today,
       });
     }
   }
 
   return risks
-    .sort((a, b) => b.potentialImpact - a.potentialImpact)
+    .sort((a, b) => (b.potentialImpact || 0) - (a.potentialImpact || 0))
     .slice(0, 10);
 }

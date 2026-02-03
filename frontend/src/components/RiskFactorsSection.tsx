@@ -70,10 +70,12 @@ const getTypeIcon = (type: string) => {
   }
 };
 
-const formatCurrency = (value: number): string => {
-  if (value >= 1000000) return `$${(value / 1000000).toFixed(2)}M`;
-  if (value >= 1000) return `$${(value / 1000).toFixed(0)}K`;
-  return `$${value.toFixed(0)}`;
+// Safe formatCurrency that handles null/undefined
+const formatCurrency = (value: number | null | undefined): string => {
+  const safeValue = value ?? 0;
+  if (safeValue >= 1000000) return `$${(safeValue / 1000000).toFixed(2)}M`;
+  if (safeValue >= 1000) return `$${(safeValue / 1000).toFixed(0)}K`;
+  return `$${safeValue.toFixed(0)}`;
 };
 
 interface RiskItemProps {
@@ -81,12 +83,21 @@ interface RiskItemProps {
 }
 
 const RiskItem: React.FC<RiskItemProps> = ({ risk }) => {
+  // Safe access with defaults
+  const severity = risk.severity || "low";
+  const potentialImpact = risk.potentialImpact ?? 0;
+  const title = risk.title || "Unknown Risk";
+  const description = risk.description || "No description available";
+  const entityName = risk.entity?.name || "Unknown";
+  const suggestedAction =
+    risk.suggestedAction || "Review and take appropriate action";
+
   return (
     <Card
       sx={{
         mb: 2,
         borderLeft: 4,
-        borderColor: `${getSeverityColor(risk.severity)}.main`,
+        borderColor: `${getSeverityColor(severity)}.main`,
         transition: "all 0.2s",
         "&:hover": {
           boxShadow: 3,
@@ -109,38 +120,38 @@ const RiskItem: React.FC<RiskItemProps> = ({ risk }) => {
                 width: 32,
                 height: 32,
                 backgroundColor: alpha(
-                  getSeverityColor(risk.severity) === "error"
+                  getSeverityColor(severity) === "error"
                     ? "#ef4444"
-                    : getSeverityColor(risk.severity) === "warning"
+                    : getSeverityColor(severity) === "warning"
                       ? "#f59e0b"
                       : "#3b82f6",
                   0.1,
                 ),
-                color: `${getSeverityColor(risk.severity)}.main`,
+                color: `${getSeverityColor(severity)}.main`,
               }}
             >
-              {getTypeIcon(risk.type)}
+              {getTypeIcon(risk.type || "stale-deal")}
             </Avatar>
             <Box>
               <Typography variant="subtitle2" sx={{ fontWeight: 600 }}>
-                {risk.title}
+                {title}
               </Typography>
               <Typography variant="caption" color="text.secondary">
-                {risk.entity.name}
+                {entityName}
               </Typography>
             </Box>
           </Box>
           <Box sx={{ display: "flex", alignItems: "center", gap: 1 }}>
             <Chip
-              label={risk.severity.toUpperCase()}
+              label={(severity || "low").toUpperCase()}
               size="small"
-              color={getSeverityColor(risk.severity) as any}
+              color={getSeverityColor(severity) as any}
               variant="outlined"
             />
-            <Tooltip title={`At risk: ${formatCurrency(risk.potentialImpact)}`}>
+            <Tooltip title={`At risk: ${formatCurrency(potentialImpact)}`}>
               <Chip
                 icon={<MoneyIcon sx={{ fontSize: 14 }} />}
-                label={formatCurrency(risk.potentialImpact)}
+                label={formatCurrency(potentialImpact)}
                 size="small"
                 color="default"
                 variant="outlined"
@@ -150,7 +161,7 @@ const RiskItem: React.FC<RiskItemProps> = ({ risk }) => {
         </Box>
 
         <Typography variant="body2" color="text.secondary" sx={{ mb: 1.5 }}>
-          {risk.description}
+          {description}
         </Typography>
 
         <Box
@@ -168,7 +179,7 @@ const RiskItem: React.FC<RiskItemProps> = ({ risk }) => {
               Suggested Action
             </Typography>
             <Typography variant="body2" sx={{ fontWeight: 500 }}>
-              {risk.suggestedAction}
+              {suggestedAction}
             </Typography>
           </Box>
           <IconButton size="small" color="primary">
@@ -197,29 +208,47 @@ const RiskFactorsSection: React.FC<RiskFactorsSectionProps> = ({
     );
   }
 
+  // Safe access to arrays with defaults
+  const staleDeals = data.staleDeals || [];
+  const underperformingReps = data.underperformingReps || [];
+  const lowActivityAccounts = data.lowActivityAccounts || [];
+  const summary = data.summary || {
+    totalRisks: 0,
+    highSeverity: 0,
+    mediumSeverity: 0,
+    lowSeverity: 0,
+    totalAtRisk: 0,
+  };
+
   const tabs = [
-    { label: "All Risks", count: data.summary.totalRisks },
-    { label: "Stale Deals", count: data.staleDeals.length },
-    { label: "Underperforming Reps", count: data.underperformingReps.length },
-    { label: "Low Activity Accounts", count: data.lowActivityAccounts.length },
+    { label: "All Risks", count: summary.totalRisks || 0 },
+    { label: "Stale Deals", count: staleDeals.length },
+    { label: "Underperforming Reps", count: underperformingReps.length },
+    { label: "Low Activity Accounts", count: lowActivityAccounts.length },
   ];
 
-  const getRisksForTab = () => {
+  const getRisksForTab = (): RiskFactor[] => {
     switch (tabValue) {
       case 1:
-        return data.staleDeals;
+        return staleDeals;
       case 2:
-        return data.underperformingReps;
+        return underperformingReps;
       case 3:
-        return data.lowActivityAccounts;
+        return lowActivityAccounts;
       default:
         return [
-          ...data.staleDeals,
-          ...data.underperformingReps,
-          ...data.lowActivityAccounts,
+          ...staleDeals,
+          ...underperformingReps,
+          ...lowActivityAccounts,
         ].sort((a, b) => {
-          const severityOrder = { high: 0, medium: 1, low: 2 };
-          return severityOrder[a.severity] - severityOrder[b.severity];
+          const severityOrder: Record<string, number> = {
+            high: 0,
+            medium: 1,
+            low: 2,
+          };
+          return (
+            (severityOrder[a.severity] ?? 2) - (severityOrder[b.severity] ?? 2)
+          );
         });
     }
   };
@@ -239,7 +268,7 @@ const RiskFactorsSection: React.FC<RiskFactorsSectionProps> = ({
               color="error.main"
               sx={{ fontWeight: 700 }}
             >
-              {data.summary.highSeverity}
+              {summary.highSeverity ?? 0}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               High Severity
@@ -253,7 +282,7 @@ const RiskFactorsSection: React.FC<RiskFactorsSectionProps> = ({
               color="warning.main"
               sx={{ fontWeight: 700 }}
             >
-              {data.summary.mediumSeverity}
+              {summary.mediumSeverity ?? 0}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               Medium Severity
@@ -263,7 +292,7 @@ const RiskFactorsSection: React.FC<RiskFactorsSectionProps> = ({
         <Grid item xs={6} sm={3}>
           <Card sx={{ textAlign: "center", py: 2 }}>
             <Typography variant="h4" color="info.main" sx={{ fontWeight: 700 }}>
-              {data.summary.lowSeverity}
+              {summary.lowSeverity ?? 0}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               Low Severity
@@ -277,7 +306,7 @@ const RiskFactorsSection: React.FC<RiskFactorsSectionProps> = ({
               color="text.primary"
               sx={{ fontWeight: 700 }}
             >
-              {formatCurrency(data.summary.totalAtRisk)}
+              {formatCurrency(summary.totalAtRisk)}
             </Typography>
             <Typography variant="caption" color="text.secondary">
               Total At Risk
@@ -307,8 +336,8 @@ const RiskFactorsSection: React.FC<RiskFactorsSectionProps> = ({
         </Tabs>
         <CardContent>
           <Box sx={{ maxHeight: 500, overflow: "auto" }}>
-            {getRisksForTab().map((risk) => (
-              <RiskItem key={risk.id} risk={risk} />
+            {getRisksForTab().map((risk, index) => (
+              <RiskItem key={risk.id || `risk-${index}`} risk={risk} />
             ))}
             {getRisksForTab().length === 0 && (
               <Box sx={{ textAlign: "center", py: 4 }}>
