@@ -40,7 +40,9 @@ function getStaleDeals(): RiskFactor[] {
 
   for (const deal of openDeals) {
     // Skip deals without proper data
-    if (!deal.deal_id || !deal.created_at) continue;
+    if (!deal.deal_id || !deal.created_at) {
+      continue;
+    }
 
     const dealActivities = allActivities.filter(
       (a) => a.deal_id === deal.deal_id,
