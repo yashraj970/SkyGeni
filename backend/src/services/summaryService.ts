@@ -34,7 +34,7 @@ export function getSummary(): SummaryResponse {
     0,
   );
 
-  // Get closed won deals for same quarter last year
+  // Get closed won deals for same quarter of last year
   const lastYearDeals = models.getClosedWonDealsInRange(
     sameQuarterLastYear.start,
     sameQuarterLastYear.end,
