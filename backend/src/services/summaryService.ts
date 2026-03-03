@@ -34,6 +34,16 @@ export function getSummary(): SummaryResponse {
     0,
   );
 
+  //Get closed won deals of previos month
+  const previousMonthDeals = models.getClosedWonDealsInRange(
+    previousQuarter.start,
+    previousQuarter.end,
+  );
+  const previousMonthRevenue = previousMonthDeals.reduce(
+    (sum, deal) => sum + deal.amount,
+    0,
+  );
+
   // Get closed won deals for same quarter of last year
   const lastYearDeals = models.getClosedWonDealsInRange(
     sameQuarterLastYear.start,
